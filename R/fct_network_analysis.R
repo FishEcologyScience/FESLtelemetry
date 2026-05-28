@@ -27,11 +27,18 @@
 #' and accounts for receivers that may have been relocated to multiple positions.
 #'
 #' @param data A dataframe containing acoustic telemetry detection data with fish IDs,
-#' receiver IDs, and geographic coordinates.
-#' @param FishID A vector or column from data describing fish identity (will be coerced to integer).
-#' @param ReceiverID A vector or column from data describing acoustic receiver identity.
+#' receiver IDs, and geographic coordinates. Alternatively, a positionRtools
+#' \code{atel} object — in which case \code{FishID}, \code{ReceiverID},
+#' \code{lat}, and \code{long} are extracted automatically from the detections
+#' component and do not need to be supplied.
+#' @param FishID A vector or column from data describing fish identity (will be
+#' coerced to integer). Not required when \code{data} is an \code{atel} object.
+#' @param ReceiverID A vector or column from data describing acoustic receiver
+#' identity. Not required when \code{data} is an \code{atel} object.
 #' @param lat A numeric vector or column from data with latitude coordinates.
+#' Not required when \code{data} is an \code{atel} object.
 #' @param long A numeric vector or column from data with longitude coordinates.
+#' Not required when \code{data} is an \code{atel} object.
 #' @param ... Additional arguments (currently unused).
 #'
 #' @returns A list containing four elements:
@@ -44,7 +51,26 @@
 #'
 #' @export
 #'
-network_summary <- function(data, FishID, ReceiverID, lat, long, ...){
+network_summary <- function(data, FishID = NULL, ReceiverID = NULL, lat = NULL, long = NULL, ...){
+
+  # Extract columns from atel input, or validate that vectors were supplied
+  #----------------------------#
+  if (inherits(data, "atel")) {
+    dets       <- as.data.frame(data$detections)
+    FishID     <- dets$animal_id
+    ReceiverID <- dets$receiver_sn
+    lat        <- dets$deploy_lat
+    long       <- dets$deploy_lon
+    data       <- dets
+  } else {
+    if (is.null(FishID) || is.null(ReceiverID) || is.null(lat) || is.null(long)) {
+      stop(
+        "FishID, ReceiverID, lat, and long are required when data is not an atel object.",
+        call. = FALSE
+      )
+    }
+  }
+
   data$FishID<- as.integer(FishID) #Show function where to find data
   data$ReceiverNames <- ReceiverID #Show function where to find data
   data$ReceiverID<-as.integer(as.factor(ReceiverID)) #Show function where to find data
@@ -169,7 +195,7 @@ network_plot <- function(data, #specify previously created network matrix
           aes(x=long, y=lat, label=(data$receiver.locations$ReceiverNames)), #add labels for receiver names
           hjust = 0, size=label.size, alpha=label.transparency, nudge_x=label.nudge) #add labels for receiver names
     } #end if else loop
-  ###
-  print(a + c) #print plot with optional shapefile and labels
-  ###
+  p <- a + c
+  print(p)
+  invisible(p)
 } #end function

@@ -69,6 +69,10 @@ calculate_residency <- function(data,
                                 long_col = "deploy_long",
                                 units = "hours") {
 
+  # Normalize atel input to plain dataframe with FESL default column names
+  #----------------------------#
+  data <- .extract_atel_detections(data)
+
   # Validate inputs
   #----------------------------#
   required_cols <- c(animal_col, station_col, timestamp_col, date_col, lat_col, long_col)
@@ -163,4 +167,34 @@ calculate_residency <- function(data,
     )
 
   return(df_residency_summary)
+}
+
+
+# Internal helper: normalize atel object to FESL-standard plain dataframe
+#
+# Extracts the detections tibble from an atel object and renames columns to
+# match calculate_residency() default parameter names. Plain dataframes pass
+# through unchanged. Not exported.
+.extract_atel_detections <- function(data) {
+
+  if (!inherits(data, "atel")) return(data)
+
+  dets <- as.data.frame(data$detections)
+
+  # Rename atel column names to FESL defaults
+  col_renames <- c(
+    receiver_sn            = "station_no",
+    detection_datetime_utc = "detection_timestamp_est",
+    deploy_lon             = "deploy_long"
+  )
+  for (src in intersect(names(col_renames), names(dets))) {
+    names(dets)[names(dets) == src] <- col_renames[[src]]
+  }
+
+  # Derive date column if not present
+  if (!"date" %in% names(dets) && "detection_timestamp_est" %in% names(dets)) {
+    dets$date <- as.Date(dets$detection_timestamp_est, tz = "UTC")
+  }
+
+  dets
 }

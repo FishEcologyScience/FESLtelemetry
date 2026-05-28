@@ -1,0 +1,370 @@
+---
+title: "Getting Started with FESLtelemetry"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with FESLtelemetry}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.width  = 7,
+  fig.height = 5
+)
+```
+
+## Overview
+
+FESLtelemetry is the publication-level analytical layer of the PositionR acoustic telemetry ecosystem. It is designed to work downstream of [positionRtools](https://github.com/jakebrownscombe/positionRtools), which handles data ingestion, quality control, filtering, and mortality detection.
+
+```text
+positionRtools  →  Load / QC / Filter / Mortality
+                              ↓  (atel object)
+glatos_exploreR →  Interactive exploration  →  [optional] filter_bookmark.json
+                              ↓
+FESLtelemetry   →  Residency / Network analysis / Publication figures / Templates
+```
+
+The package provides:
+
+- **Station residency analysis** — station-transition tracking with date-level granularity
+- **Movement network analysis** — pairwise movement matrices and spatial network plots
+- **Analysis templates** — standardized scripts that define the FESL lab workflow
+- **atel compatibility** — all core functions accept positionRtools `atel` objects directly, with backwards compatibility for plain GLATOS-format dataframes
+
+---
+
+## Installation
+
+```{r install, eval = FALSE}
+# FESLtelemetry
+remotes::install_github("FishEcologyScience/FESL_package_telemetry")
+
+# positionRtools (recommended — required for atel workflows)
+remotes::install_github("jakebrownscombe/positionRtools")
+```
+
+```{r load}
+library(FESLtelemetry)
+library(tidyverse)
+```
+
+---
+
+## Example Data
+
+FESLtelemetry includes a built-in dataset for demonstrations: 100,000 acoustic telemetry detections from Hamilton Harbour in GLATOS format, along with a shoreline shapefile.
+
+```{r example-data}
+# Load built-in data
+data("example_data_raw_dets", package = "FESLtelemetry")
+data("shapefile_HH_WGS84",    package = "FESLtelemetry")
+
+# Inspect structure
+dplyr::glimpse(example_data_raw_dets)
+```
+
+```{r example-data-summary}
+cat("Detections:", format(nrow(example_data_raw_dets), big.mark = ","), "\n")
+cat("Animals:   ", length(unique(example_data_raw_dets$animal_id)), "\n")
+cat("Stations:  ", length(unique(example_data_raw_dets$station_no)), "\n")
+cat("Date range:", format(min(example_data_raw_dets$date), "%Y-%m-%d"),
+    "to", format(max(example_data_raw_dets$date), "%Y-%m-%d"), "\n")
+```
+
+---
+
+## Working with atel Objects
+
+The recommended workflow starts with a positionRtools `atel` object — a standardized container produced after QC and filtering. All FESLtelemetry core functions accept `atel` directly.
+
+### Converting raw files to atel
+
+If you are starting from raw GLATOS (or OTN, Fathom) data files, use `raw_to_atel()` to produce an `atel` object in one step. This requires positionRtools.
+
+```{r raw-to-atel, eval = FALSE}
+# From GLATOS RDS files (most common FESL use case)
+atel_obj <- raw_to_atel(
+  detections  = "path/to/glatos_detections.rds",
+  deployments = "path/to/glatos_receivers.rds",
+  animals     = "path/to/glatos_animals.rds",
+  source      = "GLATOS"
+)
+
+# From OTN CSV/XLSX exports
+atel_obj <- raw_to_atel(
+  detections  = "detections.csv",
+  deployments = "deployments.xlsx",
+  animals     = "animals.xlsx",
+  source      = "OTN"
+)
+```
+
+### Loading a saved atel object
+
+After positionRtools processing, `atel` objects are typically saved as RDS or Parquet files.
+
+```{r load-atel, eval = FALSE}
+# Load from RDS (standard)
+atel_obj <- readRDS("path/to/processed_atel.rds")
+
+# Load from Parquet (positionRtools format)
+atel_obj <- positionRtools::read_atel("path/to/parquet_directory/")
+```
+
+---
+
+## Station Residency
+
+`calculate_residency()` tracks individual fish movements between receiver stations and computes the total time spent at each station per day. It identifies consecutive detections at the same station and sums their durations.
+
+### With atel input (recommended)
+
+Column mapping is handled automatically — `receiver_sn`, `detection_datetime_utc`, and `deploy_lon` are translated to FESL conventions internally.
+
+```{r residency-atel, eval = FALSE}
+df_residency <- calculate_residency(atel_obj, units = "hours")
+```
+
+### With plain GLATOS dataframe
+
+```{r residency-glatos}
+df_residency <- calculate_residency(
+  data          = example_data_raw_dets,
+  animal_col    = "animal_id",
+  station_col   = "station_no",
+  timestamp_col = "detection_timestamp_est",
+  date_col      = "date",
+  lat_col       = "deploy_lat",
+  long_col      = "deploy_long",
+  units         = "hours"
+)
+
+dplyr::glimpse(df_residency)
+```
+
+### Interpreting residency output
+
+Each row is one fish at one station on one day. The `residence` column holds total time in the specified units.
+
+```{r residency-summary}
+# Per-fish summary
+df_residency %>%
+  dplyr::group_by(animal_id) %>%
+  dplyr::summarize(
+    total_hours  = round(sum(residence, na.rm = TRUE), 1),
+    n_stations   = dplyr::n_distinct(station_no),
+    n_days       = dplyr::n_distinct(date),
+    .groups      = "drop"
+  ) %>%
+  dplyr::arrange(dplyr::desc(total_hours)) %>%
+  head(10)
+```
+
+### Residency heatmap
+
+A common publication figure shows residency as a spatiotemporal heatmap — stations ordered geographically on the y-axis, date on the x-axis.
+
+```{r residency-heatmap, fig.height = 6}
+# Station coordinate key
+temp_station_key <- example_data_raw_dets %>%
+  dplyr::select(station_no, deploy_lat, deploy_long) %>%
+  dplyr::slice_head(by = station_no)
+
+df_residency %>%
+  dplyr::left_join(temp_station_key, by = "station_no") %>%
+  dplyr::mutate(
+    station_factor = forcats::fct_reorder(
+      as.factor(station_no), deploy_long, .fun = median
+    )
+  ) %>%
+  ggplot2::ggplot(aes(x = date, y = station_factor, fill = residence)) +
+  ggplot2::geom_tile() +
+  viridis::scale_fill_viridis_c(end = 0.85, na.value = "grey90") +
+  ggplot2::labs(
+    x    = "Date",
+    y    = "Station (ordered west to east)",
+    fill = "Daily residency\n(hours)"
+  ) +
+  ggplot2::theme_classic() +
+  ggplot2::theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+rm(temp_station_key)
+```
+
+---
+
+## Movement Network Analysis
+
+`network_summary()` builds a movement network from detection data: it identifies when each fish moves from one receiver to another (using run-length encoding to collapse repeat detections) and assembles a pairwise movement matrix with spatial coordinates.
+
+### With atel input (recommended)
+
+```{r network-atel, eval = FALSE}
+network_data <- network_summary(atel_obj)
+```
+
+### With plain GLATOS dataframe
+
+```{r network-glatos}
+network_data <- network_summary(
+  data       = example_data_raw_dets,
+  FishID     = example_data_raw_dets$animal_id,
+  ReceiverID = example_data_raw_dets$station_no,
+  lat        = example_data_raw_dets$deploy_lat,
+  long       = example_data_raw_dets$deploy_long
+)
+```
+
+### Inspecting the network object
+
+`network_summary()` returns a named list with four components.
+
+```{r network-inspect}
+# Receiver locations with detection frequencies
+head(network_data$receiver.locations)
+
+# Individual fish movements (from → to)
+head(network_data$individual.moves)
+
+# Total movements between each pair
+network_data$moves.matrix[1:5, 1:5]
+```
+
+### Plotting the network
+
+`network_plot()` renders the network spatially. Node size is fixed; node colour reflects detection frequency (viridis scale). Edge width scales with movement frequency. An `sf` shapefile can be overlaid for geographic context.
+
+```{r network-plot}
+network_plot(
+  data        = network_data,
+  Min.traffic = 2,
+  shapefile   = shapefile_HH_WGS84,
+  labels      = TRUE,
+  label.size  = 2.5,
+  plot.title  = "Hamilton Harbour — Movement Network"
+)
+```
+
+The plot is printed to the active device and returned invisibly as a ggplot object, so it can be captured for `ggsave()`:
+
+```{r network-save, eval = FALSE}
+p <- network_plot(network_data, shapefile = shapefile_HH_WGS84)
+ggplot2::ggsave("network_plot.png", p, width = 10, height = 8, dpi = 300)
+```
+
+---
+
+## Analysis Templates
+
+Templates are standardized R scripts that encode the FESL lab workflow. Deploy them to your project directory with `use_template()`, then open, customize, and run.
+
+```{r templates-list}
+list_templates()
+```
+
+### Template 00 — Load and filter
+
+The entry-point template for every FESL analysis session. Loads an `atel` object and optionally applies a filter bookmark exported from glatos_exploreR.
+
+```{r template00, eval = FALSE}
+use_template("load_and_filter", output_dir = "02_scripts")
+```
+
+The deployed script provides three paths:
+
+1. **Path A** — load from RDS (standard, used 9/10 times)
+2. **Path B** — load from Parquet files
+3. **Optional filter block** — reads a `filter_bookmark.json` and re-applies the UI-selected filters (species, date range, lake, project) using positionRtools filter functions
+
+### Template 01 — Network and residency
+
+Performs station residency calculations and movement network analysis on the `atel` object produced by template00. Outputs `df_residency`, `network_data`, and a `plots` list with figure-ready ggplot objects.
+
+```{r template01, eval = FALSE}
+use_template("network_residency", output_dir = "02_scripts")
+```
+
+### Typical session workflow
+
+```{r workflow, eval = FALSE}
+# 1. Deploy templates to your project (once per project)
+use_template("load_and_filter")
+use_template("network_residency")
+
+# 2. Open and fill in template00 — set param_atel_path, run
+# 3. Open and run template01 — produces df_residency, network_data, plots
+# 4. Customize plots for publication
+ggplot2::ggsave("figures/fig2_network.png",
+                plots$network, width = 10, height = 8, dpi = 300)
+```
+
+---
+
+## Filter Bookmark Workflow
+
+When working on a large multi-species, multi-lake dataset in glatos_exploreR, a user may identify a specific subset of interest interactively (e.g., walleye detections in Lake Ontario during 2023). The filter state can be exported as a `filter_bookmark.json` directly from the app.
+
+Template00's optional filter block reads this file and re-applies the same filters to the full `atel` object using positionRtools:
+
+```{r filter-bookmark, eval = FALSE}
+# In template00, uncomment the filter bookmark block:
+param_bookmark_path <- "filter_bookmark.json"
+temp_filters <- jsonlite::fromJSON(param_bookmark_path)
+
+# Filter to bookmarked species
+temp_target_animals <- dplyr::filter(
+  atel_obj$animals,
+  species_common %in% temp_filters$filters$species
+)
+atel_obj <- positionRtools::filter_custom(
+  atel_obj,
+  animal_id %in% temp_target_animals$animal_id
+)
+
+# Filter to bookmarked date range
+atel_obj <- positionRtools::filter_custom(
+  atel_obj,
+  detection_datetime_utc >= as.POSIXct(temp_filters$filters$date_start, tz = "UTC"),
+  detection_datetime_utc <= as.POSIXct(temp_filters$filters$date_end,   tz = "UTC")
+)
+```
+
+The `filter_bookmark.json` structure produced by glatos_exploreR:
+
+```json
+{
+  "exported_from": "glatos_exploreR",
+  "export_datetime": "2026-05-28T14:30:00",
+  "filters": {
+    "species":    ["walleye"],
+    "lakes":      ["Lake Ontario"],
+    "projects":   ["HH_2023"],
+    "date_start": "2023-04-01",
+    "date_end":   "2023-10-31"
+  }
+}
+```
+
+---
+
+## Session Cleanup
+
+All FESL templates follow Paul's lab conventions for environment cleanup. Intermediary objects use the `temp_` prefix and are removed at section boundaries:
+
+```{r cleanup-pattern, eval = FALSE}
+rm(list = ls(pattern = "^temp_"))
+cat("Cleanup complete.\n")
+```
+
+---
+
+## Further Reading
+
+- **positionRtools** — data ingestion, QC, filtering, mortality detection, and export: `vignette("01_getting_started", package = "positionRtools")`
+- **glatos_exploreR** — interactive network-level exploration of GLATOS telemetry data
+- FESL lab coding conventions: `wiki/articles/coding--r-conventions.md`
+```
