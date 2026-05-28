@@ -9,7 +9,9 @@
 #'   \item \code{"load_and_filter"} - Load positionRtools atel object; optionally
 #'     apply glatos_exploreR filter bookmark (template00 — run first)
 #'   \item \code{"network_residency"} - Movement network analysis and station
-#'     residency from atel input (template01)
+#'     residency; Path A (atel) or Path B (GLATOS) (template01)
+#'   \item \code{"growth_analysis"} - Von Bertalanffy age-at-tagging, forward
+#'     projection, and optional morphology prediction (template02)
 #'   \item \code{"summarize_dets"} - (Deprecated) Detection data summary using
 #'     raw GLATOS-format dataframes. Use \code{"load_and_filter"} for new workflows.
 #' }
@@ -32,7 +34,7 @@
 use_template <- function(template, output_dir = "02_scripts", overwrite = FALSE) {
 
   # Validate template name
-  available_templates <- c("load_and_filter", "network_residency", "summarize_dets")
+  available_templates <- c("load_and_filter", "network_residency", "growth_analysis", "summarize_dets")
 
   if (!template %in% available_templates) {
     stop(
@@ -54,6 +56,7 @@ use_template <- function(template, output_dir = "02_scripts", overwrite = FALSE)
   template_files <- c(
     load_and_filter  = "template00-XX_load_and_filter.R",
     network_residency = "template01-XX_network_residency.R",
+    growth_analysis  = "template02-XX_growth_analysis.R",
     summarize_dets   = "template01-XX_summarize_dets.R"
   )
 
@@ -115,7 +118,8 @@ use_template <- function(template, output_dir = "02_scripts", overwrite = FALSE)
 list_templates <- function() {
   templates <- c(
     "load_and_filter"  = "Load atel object + optional glatos_exploreR filter bookmark (template00 — run first)",
-    "network_residency" = "Movement network analysis and station residency from atel input (template01)",
+    "network_residency" = "Movement network analysis and station residency; Path A (atel) or Path B (GLATOS) (template01)",
+    "growth_analysis"  = "Von Bertalanffy age-at-tagging, forward projection, morphology prediction (template02)",
     "summarize_dets"   = "[DEPRECATED] Detection summary using raw GLATOS dataframes"
   )
 
