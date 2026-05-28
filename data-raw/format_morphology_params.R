@@ -1,7 +1,7 @@
 ## --------------------------------------------------------------#
-## Script: format_morphology_params.R
+## Script: format_params_df_morphology.R
 ## Purpose: Read morphology_model_results.xlsx, standardize column names and
-##          relationship labels, and save as the morphology_params package
+##          relationship labels, and save as the params_df_morphology package
 ##          data object.
 ## Author: Paul Bzonek [Claude]
 ## Date Created: 2026-05-28
@@ -13,7 +13,7 @@ temp_morph_raw <- readxl::read_xlsx(
 )
 
 # Standardize column names
-morphology_params <- temp_morph_raw %>%
+params_df_morphology <- temp_morph_raw %>%
   dplyr::rename(
     species_common = `Species name`,
     relationship   = `Relationship`,
@@ -38,9 +38,9 @@ morphology_params <- temp_morph_raw %>%
 
 rm(temp_morph_raw)
 
-usethis::use_data(morphology_params, overwrite = TRUE, compress = "xz")
+usethis::use_data(params_df_morphology, overwrite = TRUE, compress = "xz")
 
-cat("morphology_params saved:\n")
-cat("  Rows:", nrow(morphology_params), "\n")
-cat("  Species:", length(unique(morphology_params$species_common)), "\n")
-cat("  Relationships:", paste(unique(morphology_params$relationship), collapse = ", "), "\n")
+cat("params_df_morphology saved:\n")
+cat("  Rows:", nrow(params_df_morphology), "\n")
+cat("  Species:", length(unique(params_df_morphology$species_common)), "\n")
+cat("  Relationships:", paste(unique(params_df_morphology$relationship), collapse = ", "), "\n")

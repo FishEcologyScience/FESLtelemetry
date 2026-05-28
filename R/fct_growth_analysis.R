@@ -4,9 +4,12 @@
 ## Date Created: 2026-05-28
 ##
 ## Workflow mirrors 2026_Bzonek_Walleye_Spawning (Script1-2, Script2-3).
-## Growth parameters drawn from vb_growth_params package data.
-## Morphology parameters drawn from morphology_params package data.
+## Growth parameters drawn from params_df_VonBertalanffy package data.
+## Morphology parameters drawn from params_df_morphology package data.
 ## --------------------------------------------------------------#
+
+# Suppress R CMD check notes for package datasets referenced by bare name
+utils::globalVariables(c("params_df_VonBertalanffy", "params_df_morphology"))
 
 
 
@@ -26,7 +29,7 @@
 #'   and tagging date. If an \code{atel} object is supplied, \code{data$animals}
 #'   is used automatically.
 #' @param species Character. Species common name matching a row in
-#'   \code{vb_growth_params} (e.g., \code{"Walleye"}). Not required if
+#'   \code{params_df_VonBertalanffy} (e.g., \code{"Walleye"}). Not required if
 #'   \code{vb_params} is supplied directly.
 #' @param fork_length_col Character. Name of the column containing fork length
 #'   measurements in mm. Default is \code{"length_fork"}.
@@ -69,15 +72,15 @@ calculate_age_at_tagging <- function(data,
   if (is.null(vb_params)) {
     if (is.null(species)) {
       stop(
-        "Provide either 'species' (matched to vb_growth_params) or 'vb_params' directly.",
+        "Provide either 'species' (matched to params_df_VonBertalanffy) or 'vb_params' directly.",
         call. = FALSE
       )
     }
-    vb_params <- vb_growth_params[vb_growth_params$species_common == species, ]
+    vb_params <- params_df_VonBertalanffy[params_df_VonBertalanffy$species_common == species, ]
     if (nrow(vb_params) == 0) {
       stop(
-        "Species '", species, "' not found in vb_growth_params.\n",
-        "Available species: ", paste(vb_growth_params$species_common, collapse = ", "),
+        "Species '", species, "' not found in params_df_VonBertalanffy.\n",
+        "Available species: ", paste(params_df_VonBertalanffy$species_common, collapse = ", "),
         call. = FALSE
       )
     }
@@ -131,7 +134,7 @@ calculate_age_at_tagging <- function(data,
 #'   with one row per animal-year). Must already contain age at tagging and
 #'   tag year columns, typically added by \code{\link{calculate_age_at_tagging}}.
 #' @param species Character. Species common name matching a row in
-#'   \code{vb_growth_params}. Not required if \code{vb_params} is supplied.
+#'   \code{params_df_VonBertalanffy}. Not required if \code{vb_params} is supplied.
 #' @param age_at_tag_col Character. Name of the age-at-tagging column.
 #'   Default is \code{"age_at_tag"}.
 #' @param tag_year_col Character. Name of the tagging year column.
@@ -181,15 +184,15 @@ project_growth_forward <- function(data,
   if (is.null(vb_params)) {
     if (is.null(species)) {
       stop(
-        "Provide either 'species' (matched to vb_growth_params) or 'vb_params' directly.",
+        "Provide either 'species' (matched to params_df_VonBertalanffy) or 'vb_params' directly.",
         call. = FALSE
       )
     }
-    vb_params <- vb_growth_params[vb_growth_params$species_common == species, ]
+    vb_params <- params_df_VonBertalanffy[params_df_VonBertalanffy$species_common == species, ]
     if (nrow(vb_params) == 0) {
       stop(
-        "Species '", species, "' not found in vb_growth_params.\n",
-        "Available species: ", paste(vb_growth_params$species_common, collapse = ", "),
+        "Species '", species, "' not found in params_df_VonBertalanffy.\n",
+        "Available species: ", paste(params_df_VonBertalanffy$species_common, collapse = ", "),
         call. = FALSE
       )
     }
@@ -255,12 +258,12 @@ project_growth_forward <- function(data,
 #' @name predict_morphology
 #'
 #' @description Predicts body width or mass from fork length using
-#' species-specific regression parameters from the \code{morphology_params}
+#' species-specific regression parameters from the \code{params_df_morphology}
 #' package dataset (Hamilton Harbour morphology study).
 #'
 #' @param fork_length Numeric vector. Fork length measurements in mm.
 #' @param species Character. Species common name matching
-#'   \code{morphology_params$species_common} (e.g., \code{"Walleye"}).
+#'   \code{params_df_morphology$species_common} (e.g., \code{"Walleye"}).
 #' @param relationship Character. Which morphometric relationship to apply.
 #'   One of:
 #'   \describe{
@@ -297,16 +300,16 @@ predict_morphology <- function(fork_length,
   # Resolve morphology parameters
   #----------------------------#
   if (is.null(morph_params)) {
-    temp_row <- morphology_params[
-      morphology_params$species_common == species &
-      morphology_params$relationship   == relationship,
+    temp_row <- params_df_morphology[
+      params_df_morphology$species_common == species &
+      params_df_morphology$relationship   == relationship,
     ]
     if (nrow(temp_row) == 0) {
       stop(
         "No morphology parameters found for species '", species,
         "', relationship '", relationship, "'.\n",
         "Available species: ",
-        paste(unique(morphology_params$species_common), collapse = ", "),
+        paste(unique(params_df_morphology$species_common), collapse = ", "),
         call. = FALSE
       )
     }

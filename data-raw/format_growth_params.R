@@ -1,19 +1,20 @@
 ## --------------------------------------------------------------#
 ## Script: format_growth_params.R
-## Purpose: Read vb_growth_params.csv and save as package data object.
-##          Run this script to update the vb_growth_params dataset after
-##          adding new species rows to the CSV.
+## Purpose: Read the Parameters sheet from vb_growth_params.xlsx and save
+##          as the vb_growth_params package data object.
+##          Run this script after adding new species rows to the Excel file.
 ## Author: Paul Bzonek [Claude]
 ## Date Created: 2026-05-28
 ## --------------------------------------------------------------#
 
-vb_growth_params <- utils::read.csv(
-  "data-raw/vb_growth_params.csv",
-  stringsAsFactors = FALSE
-)
+params_df_VonBertalanffy <- readxl::read_xlsx(
+  "data-raw/files-raw/vb_growth_params.xlsx",
+  sheet = "Parameters"
+) %>%
+  as.data.frame()
 
-usethis::use_data(vb_growth_params, overwrite = TRUE, compress = "xz")
+usethis::use_data(params_df_VonBertalanffy, overwrite = TRUE, compress = "xz")
 
-cat("vb_growth_params saved:\n")
-cat("  Species:", nrow(vb_growth_params), "\n")
-cat("  Columns:", paste(names(vb_growth_params), collapse = ", "), "\n")
+cat("params_df_VonBertalanffy saved:\n")
+cat("  Species:", nrow(params_df_VonBertalanffy), "\n")
+cat("  Columns:", paste(names(params_df_VonBertalanffy), collapse = ", "), "\n")
