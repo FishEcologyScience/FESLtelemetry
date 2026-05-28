@@ -1,7 +1,7 @@
 Package: FESLtelemetry
 Type: Package
 Title: Publication-Level Acoustic Telemetry Analysis for the Fish Ecology Science Lab
-Version: 0.2.0
+Version: 0.2.1
 Date: 2026-05-28
 Authors@R:
     person(given = "Paul",
@@ -33,5 +33,6 @@ Suggests:
     jsonlite,
     knitr,
     positionRtools,
+    readxl,
     rmarkdown
 VignetteBuilder: knitr

@@ -7,18 +7,17 @@
 ##    telemetry data. Produces movement network summaries, residency summaries,
 ##    and figure-ready plots following FESL standards.
 ##
-##    Requires an atel object from positionRtools as input.
-##    Run template00-XX_load_and_filter.R first.
+##    Two input paths are provided — choose one and comment out the other.
 ##
 ## --------------------------------------------------------------#
 ## INPUTS:
-##   atel_obj - positionRtools atel object (from template00)
-##     Required atel detection columns:
-##       - animal_id: Fish identifier
-##       - detection_datetime_utc: Detection timestamp (POSIXct, UTC)
-##       - receiver_sn: Receiver serial number
-##       - deploy_lat: Receiver latitude (numeric)
-##       - deploy_lon: Receiver longitude (numeric)
+##   PATH A (atel, recommended):
+##     atel_obj  - positionRtools atel object (from template00)
+##
+##   PATH B (raw GLATOS dataframe):
+##     df_raw    - GLATOS-format detection dataframe
+##       Required columns: animal_id, detection_timestamp_est,
+##         station_no, deploy_lat, deploy_long, date
 ##
 ## OUTPUTS:
 ##   df_residency       - Residency times by date, animal, and station
@@ -31,7 +30,7 @@
 ##   Required packages:
 ##     - tidyverse (dplyr, ggplot2, forcats)
 ##     - FESLtelemetry
-##     - positionRtools
+##     - positionRtools (PATH A only)
 ##
 ## --------------------------------------------------------------#
 ## Author: [Your Name]
@@ -45,61 +44,119 @@
 
 library(tidyverse)
 
+# Select input path: "atel" or "glatos"
+param_input_path <- "atel"
+
 # Initialize plots list
 plots <- list()
 
 
 
-##### Prepare detections from atel ################################----
+##### Prepare detections ###################################----
 #-------------------------------------------------------------#
-cat("\n--- Preparing detections from atel object ---\n")
+cat("\n--- Preparing detections ---\n")
 
-cat("  Detections:", format(nrow(atel_obj$detections), big.mark = ","), "\n")
-cat("  Animals:", length(unique(atel_obj$detections$animal_id)), "\n")
-cat("  Stations:", length(unique(atel_obj$detections$receiver_sn)), "\n")
-cat("  Date range:",
-    format(min(as.Date(atel_obj$detections$detection_datetime_utc, tz = "UTC")), "%Y-%m-%d"),
-    "to",
-    format(max(as.Date(atel_obj$detections$detection_datetime_utc, tz = "UTC")), "%Y-%m-%d"),
-    "\n")
+## PATH A: atel input (recommended) ----------------------------#
+if (param_input_path == "atel") {
+
+  cat("  Input: atel object\n")
+  cat("  Detections:", format(nrow(atel_obj$detections), big.mark = ","), "\n")
+  cat("  Animals:", length(unique(atel_obj$detections$animal_id)), "\n")
+  cat("  Stations:", length(unique(atel_obj$detections$receiver_sn)), "\n")
+  cat("  Date range:",
+      format(min(as.Date(atel_obj$detections$detection_datetime_utc, tz = "UTC")), "%Y-%m-%d"),
+      "to",
+      format(max(as.Date(atel_obj$detections$detection_datetime_utc, tz = "UTC")), "%Y-%m-%d"),
+      "\n")
+
+}
+
+## PATH B: raw GLATOS dataframe --------------------------------#
+# if (param_input_path == "glatos") {
+#
+#   cat("  Input: raw GLATOS dataframe\n")
+#   cat("  Detections:", format(nrow(df_raw), big.mark = ","), "\n")
+#   cat("  Animals:", length(unique(df_raw$animal_id)), "\n")
+#   cat("  Stations:", length(unique(df_raw$station_no)), "\n")
+#   cat("  Date range:",
+#       format(min(df_raw$date), "%Y-%m-%d"),
+#       "to",
+#       format(max(df_raw$date), "%Y-%m-%d"),
+#       "\n")
+#
+# }
 
 
 
-##### Station Residency ###########################################----
+##### Station Residency ########################################----
 #-------------------------------------------------------------#
 cat("\n--- Calculating station residency ---\n")
 
 # param_residency_units: time units for residency output
 param_residency_units <- "hours"   # options: "secs", "mins", "hours", "days"
 
-# Pass atel_obj directly — column mapping handled automatically
-df_residency <- FESLtelemetry::calculate_residency(
-  data  = atel_obj,
-  units = param_residency_units
-)
+## PATH A: atel input ------------------------------------------#
+if (param_input_path == "atel") {
+
+  # Pass atel_obj directly — column mapping handled automatically
+  df_residency <- FESLtelemetry::calculate_residency(
+    data  = atel_obj,
+    units = param_residency_units
+  )
+
+}
+
+## PATH B: raw GLATOS dataframe --------------------------------#
+# if (param_input_path == "glatos") {
+#
+#   df_residency <- FESLtelemetry::calculate_residency(
+#     data          = df_raw,
+#     animal_col    = "animal_id",
+#     station_col   = "station_no",
+#     timestamp_col = "detection_timestamp_est",
+#     date_col      = "date",
+#     lat_col       = "deploy_lat",
+#     long_col      = "deploy_long",
+#     units         = param_residency_units
+#   )
+#
+# }
 
 cat("  Residency calculated for",
     length(unique(df_residency$animal_id)), "fish across",
-    length(unique(df_residency$station_no)), "stations\n")
+    length(unique(df_residency$receiver_sn)), "stations\n")
 cat("  Mean daily residency:", round(mean(df_residency$residence, na.rm = TRUE), 2),
     param_residency_units, "\n")
 
 
 
-##### Residency Heatmap ###########################################----
+##### Residency Heatmap ########################################----
 #-------------------------------------------------------------#
 cat("\n--- Building residency heatmap ---\n")
 
-# Station coordinate key (one row per station, using FESL-standard column names)
-temp_station_key <- atel_obj$detections %>%
-  dplyr::select(station_no = receiver_sn, deploy_lat, deploy_lon = deploy_lon) %>%
-  dplyr::slice_head(by = station_no)
+## PATH A: station coordinate key from atel -------------------#
+if (param_input_path == "atel") {
+
+  temp_station_key <- atel_obj$detections %>%
+    dplyr::select(receiver_sn, deploy_lat, deploy_lon) %>%
+    dplyr::slice_head(by = receiver_sn)
+
+}
+
+## PATH B: station coordinate key from GLATOS df --------------#
+# if (param_input_path == "glatos") {
+#
+#   temp_station_key <- df_raw %>%
+#     dplyr::select(receiver_sn = station_no, deploy_lat, deploy_lon = deploy_long) %>%
+#     dplyr::slice_head(by = receiver_sn)
+#
+# }
 
 plots$residency_heatmap <- df_residency %>%
-  dplyr::left_join(temp_station_key, by = "station_no") %>%
+  dplyr::left_join(temp_station_key, by = "receiver_sn") %>%
   dplyr::mutate(
     station_factor = forcats::fct_reorder(
-      as.factor(station_no), deploy_lon, .fun = median
+      as.factor(receiver_sn), deploy_lon, .fun = median
     )
   ) %>%
   ggplot2::ggplot(aes(x = date, y = station_factor, fill = residence)) +
@@ -119,20 +176,37 @@ rm(list = ls(pattern = "^temp_"))
 
 
 
-##### Network Analysis ############################################----
+##### Network Analysis #########################################----
 #-------------------------------------------------------------#
 cat("\n--- Building movement network ---\n")
 
-# Pass atel_obj directly — columns extracted automatically
-network_data <- FESLtelemetry::network_summary(atel_obj)
+## PATH A: atel input ------------------------------------------#
+if (param_input_path == "atel") {
+
+  # Pass atel_obj directly — columns extracted automatically
+  network_data <- FESLtelemetry::network_summary(atel_obj)
+
+}
+
+## PATH B: raw GLATOS dataframe --------------------------------#
+# if (param_input_path == "glatos") {
+#
+#   network_data <- FESLtelemetry::network_summary(
+#     data       = df_raw,
+#     FishID     = df_raw$animal_id,
+#     ReceiverID = df_raw$station_no,
+#     lat        = df_raw$deploy_lat,
+#     long       = df_raw$deploy_long
+#   )
+#
+# }
 
 cat("  Unique stations:", nrow(network_data$receiver.locations), "\n")
-cat("  Unique movement pairs:",
-    nrow(network_data$individual.moves), "\n")
+cat("  Unique movement pairs:", nrow(network_data$individual.moves), "\n")
 
 
 
-##### Network Plot ################################################----
+##### Network Plot #############################################----
 #-------------------------------------------------------------#
 cat("\n--- Plotting movement network ---\n")
 
@@ -152,28 +226,30 @@ cat("  Network plot created\n")
 
 
 
-##### Summary Statistics ##########################################----
+##### Summary Statistics #######################################----
 #-------------------------------------------------------------#
 cat("\n--- SUMMARY STATISTICS ---\n")
 
 cat("\n1. Dataset Overview\n")
-cat("  Detections:", format(nrow(atel_obj$detections), big.mark = ","), "\n")
-cat("  Animals:", length(unique(atel_obj$detections$animal_id)), "\n")
-cat("  Stations:", length(unique(atel_obj$detections$receiver_sn)), "\n")
-cat("  Date range:",
-    format(min(as.Date(atel_obj$detections$detection_datetime_utc, tz = "UTC")), "%Y-%m-%d"),
-    "to",
-    format(max(as.Date(atel_obj$detections$detection_datetime_utc, tz = "UTC")), "%Y-%m-%d"),
-    "\n")
+if (param_input_path == "atel") {
+  cat("  Detections:", format(nrow(atel_obj$detections), big.mark = ","), "\n")
+  cat("  Animals:", length(unique(atel_obj$detections$animal_id)), "\n")
+  cat("  Stations:", length(unique(atel_obj$detections$receiver_sn)), "\n")
+  cat("  Date range:",
+      format(min(as.Date(atel_obj$detections$detection_datetime_utc, tz = "UTC")), "%Y-%m-%d"),
+      "to",
+      format(max(as.Date(atel_obj$detections$detection_datetime_utc, tz = "UTC")), "%Y-%m-%d"),
+      "\n")
+}
 
 cat("\n2. Residency Summary\n")
 temp_summary_residency <- df_residency %>%
   dplyr::group_by(animal_id) %>%
   dplyr::summarize(
-    total_residence  = sum(residence, na.rm = TRUE),
-    n_stations       = dplyr::n_distinct(station_no),
-    n_days           = dplyr::n_distinct(date),
-    .groups          = "drop"
+    total_residence = sum(residence, na.rm = TRUE),
+    n_stations      = dplyr::n_distinct(receiver_sn),
+    n_days          = dplyr::n_distinct(date),
+    .groups         = "drop"
   )
 cat("  Mean total residency per fish:",
     round(mean(temp_summary_residency$total_residence), 2),
@@ -193,7 +269,7 @@ cat("\n--- Analysis complete ---\n\n")
 
 
 
-##### Optional: Export Data and Plots #############################----
+##### Optional: Export Data and Plots ##########################----
 #-------------------------------------------------------------#
 # IMPORTANT: File exports are commented out per FESL coding conventions.
 # Uncomment when ready to save outputs.
@@ -218,7 +294,7 @@ cat("\n--- Analysis complete ---\n\n")
 
 
 
-##### Cleanup #####################################################----
+##### Cleanup ##################################################----
 #-------------------------------------------------------------#
 rm(list = ls(pattern = "^temp_"))
 cat("Cleanup complete.\n")

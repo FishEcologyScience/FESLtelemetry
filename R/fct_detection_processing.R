@@ -6,24 +6,31 @@
 #' the duration between first and last detection in each residency event.
 #'
 #' @param data A dataframe containing acoustic telemetry detection data.
+#'   Alternatively, a positionRtools \code{atel} object — in which case column
+#'   mapping is handled automatically from the detections component.
 #' @param animal_col Character. Name of column containing fish/animal identifiers.
-#' Default is "animal_id".
+#'   Default is \code{"animal_id"}.
 #' @param station_col Character. Name of column containing receiver station identifiers.
-#' Default is "station_no".
+#'   Default is \code{"receiver_sn"} (atel standard). For plain GLATOS dataframes,
+#'   pass \code{station_col = "station_no"} or let the automatic FESL-to-atel
+#'   column mapping handle it.
 #' @param timestamp_col Character. Name of column containing detection timestamps.
-#' Default is "detection_timestamp_est".
+#'   Default is \code{"detection_datetime_utc"} (atel standard).
 #' @param date_col Character. Name of column containing detection dates.
-#' Default is "date".
+#'   Default is \code{"date"}.
 #' @param lat_col Character. Name of column containing receiver latitude coordinates.
-#' Default is "deploy_lat".
+#'   Default is \code{"deploy_lat"}.
 #' @param long_col Character. Name of column containing receiver longitude coordinates.
-#' Default is "deploy_long".
-#' @param units Character. Time units for residency calculation. One of "hours" (default),
-#' "mins", "days", or "secs". Passed to \code{difftime()}.
+#'   Default is \code{"deploy_lon"} (atel standard).
+#' @param units Character. Time units for residency calculation. One of \code{"hours"}
+#'   (default), \code{"mins"}, \code{"days"}, or \code{"secs"}. Passed to
+#'   \code{difftime()}.
 #'
 #' @details
 #' The function performs the following steps:
 #' \enumerate{
+#'   \item Normalizes input to atel column naming standard (plain FESL/GLATOS
+#'     dataframes have legacy column names mapped up automatically)
 #'   \item Tracks movements by comparing current and previous detection locations
 #'   \item Calculates time lag between consecutive detections
 #'   \item Identifies unique movement events using a movement ID
@@ -37,41 +44,42 @@
 #' @return A dataframe with columns:
 #' \describe{
 #'   \item{date}{Detection date}
-#'   \item{animal_id}{Fish identifier (or custom name from animal_col)}
-#'   \item{station}{Station identifier (or custom name from station_col)}
+#'   \item{animal_id}{Fish identifier (or custom name from \code{animal_col})}
+#'   \item{receiver_sn}{Station identifier (or custom name from \code{station_col})}
 #'   \item{residence}{Total residency time at station on that date (in specified units)}
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' # Basic usage with default GLATOS column names
-#' residency <- calculate_residency(data_det)
+#' # With atel input (recommended)
+#' df_residency <- calculate_residency(atel_obj, units = "hours")
 #'
-#' # Custom column names
-#' residency <- calculate_residency(
-#'   data = my_data,
-#'   animal_col = "fish_id",
-#'   station_col = "receiver",
-#'   timestamp_col = "timestamp"
+#' # With plain GLATOS dataframe (FESL column names mapped automatically)
+#' df_residency <- calculate_residency(
+#'   data          = example_data_raw_dets,
+#'   animal_col    = "animal_id",
+#'   station_col   = "station_no",
+#'   timestamp_col = "detection_timestamp_est",
+#'   date_col      = "date",
+#'   lat_col       = "deploy_lat",
+#'   long_col      = "deploy_long",
+#'   units         = "hours"
 #' )
-#'
-#' # Calculate residency in days instead of hours
-#' residency <- calculate_residency(data_det, units = "days")
 #' }
 #'
 #' @export
 calculate_residency <- function(data,
-                                animal_col = "animal_id",
-                                station_col = "station_no",
-                                timestamp_col = "detection_timestamp_est",
-                                date_col = "date",
-                                lat_col = "deploy_lat",
-                                long_col = "deploy_long",
-                                units = "hours") {
+                                animal_col    = "animal_id",
+                                station_col   = "receiver_sn",
+                                timestamp_col = "detection_datetime_utc",
+                                date_col      = "date",
+                                lat_col       = "deploy_lat",
+                                long_col      = "deploy_lon",
+                                units         = "hours") {
 
-  # Normalize atel input to plain dataframe with FESL default column names
+  # Normalize input: atel extraction or FESL-to-atel column rename
   #----------------------------#
-  data <- .extract_atel_detections(data)
+  data <- .normalize_to_atel_names(data)
 
   # Validate inputs
   #----------------------------#
@@ -99,102 +107,96 @@ calculate_residency <- function(data,
   # Track movements between stations
   #----------------------------#
   temp_movement <- data %>%
-    # Select and rename columns using tidy evaluation
-    # !!sym() converts character strings to column names
-    # The !! "unquotes" the expression so dplyr can evaluate it
     select(
-      timestamp = !!sym(timestamp_col),      # Rename user's timestamp column to 'timestamp'
-      animal_id = !!sym(animal_col),         # Rename user's animal column to 'animal_id'
-      station = !!sym(station_col),          # Rename user's station column to 'station'
-      lat = !!sym(lat_col),                  # Rename user's lat column to 'lat'
-      lon = !!sym(long_col),                 # Rename user's long column to 'lon'
-      date = !!sym(date_col)                 # Rename user's date column to 'date'
+      timestamp = !!sym(timestamp_col),
+      animal_id = !!sym(animal_col),
+      station   = !!sym(station_col),
+      lat       = !!sym(lat_col),
+      lon       = !!sym(long_col),
+      date      = !!sym(date_col)
     ) %>%
     arrange(animal_id, timestamp) %>%
     group_by(animal_id, date) %>%
     mutate(
-      # Use lag() to get previous detection information for each fish
-      from_station = lag(station),           # Station fish moved FROM
-      from_animal_id = lag(animal_id),       # Previous animal_id (for validation)
-      from_lat = lag(lat),                   # Previous latitude
-      from_lon = lag(lon),                   # Previous longitude
-      from_timestamp = lag(timestamp),       # Previous detection time
-      lagtime = difftime(timestamp, from_timestamp, units = units), # Time since last detection
-      # Create movement ID to identify unique residency events
-      moveID = paste0(from_animal_id, from_station, station),
-      moveID = cumsum(moveID != lag(moveID, default = first(moveID))) # Increment when movement changes
+      from_station   = lag(station),
+      from_animal_id = lag(animal_id),
+      from_lat       = lag(lat),
+      from_lon       = lag(lon),
+      from_timestamp = lag(timestamp),
+      lagtime        = difftime(timestamp, from_timestamp, units = units),
+      moveID         = paste0(from_animal_id, from_station, station),
+      moveID         = cumsum(moveID != lag(moveID, default = first(moveID)))
     ) %>%
     ungroup()
 
   # Filter and tally residence times
   #----------------------------#
   df_residency <- temp_movement %>%
-    # Only keep detections where current and previous animal match (same fish)
     filter(animal_id == from_animal_id) %>%
-    # Group by unique residency events
     group_by(date, animal_id, from_station, moveID) %>%
     summarize(
-      detcount = n(),                        # Number of detections in this residency event
-      time_start = min(from_timestamp),      # Start of residency
-      time_end = max(timestamp),             # End of residency
-      residence = difftime(time_end, time_start, units = units), # Duration at station
-      .groups = "drop"
+      detcount   = n(),
+      time_start = min(from_timestamp),
+      time_end   = max(timestamp),
+      residence  = difftime(time_end, time_start, units = units),
+      .groups    = "drop"
     ) %>%
     ungroup()
 
   # Sum residency by fish, date, and station
   #----------------------------#
-  # A fish may have multiple residency events at the same station on the same day
-  # Sum these to get total daily residency per station
   df_residency_summary <- df_residency %>%
     group_by(date, animal_id, station = from_station) %>%
     summarize(
-      residence = as.numeric(sum(residence, na.rm = TRUE)), # Total residency time
-      .groups = "drop"
+      residence = as.numeric(sum(residence, na.rm = TRUE)),
+      .groups   = "drop"
     ) %>%
     ungroup()
 
-  # Restore original column names in output
+  # Restore caller-specified column names in output
   #----------------------------#
-  # The := operator is used for dynamic column naming in dplyr
-  # !!animal_col := animal_id means "create a column with the name stored in animal_col"
-  # This ensures the output uses the same column names as the input data
   df_residency_summary <- df_residency_summary %>%
     rename(
-      !!animal_col := animal_id,             # Rename 'animal_id' back to user's original name
-      !!station_col := station,              # Rename 'station' back to user's original name
-      !!date_col := date                     # Rename 'date' back to user's original name
+      !!animal_col  := animal_id,
+      !!station_col := station,
+      !!date_col    := date
     )
 
   return(df_residency_summary)
 }
 
 
-# Internal helper: normalize atel object to FESL-standard plain dataframe
+# Internal helper: normalize input to atel column naming standard.
 #
-# Extracts the detections tibble from an atel object and renames columns to
-# match calculate_residency() default parameter names. Plain dataframes pass
-# through unchanged. Not exported.
-.extract_atel_detections <- function(data) {
+# For atel objects: extracts data$detections (already uses atel names).
+# For plain dataframes: renames FESL legacy column names to atel standard
+# (station_no -> receiver_sn, detection_timestamp_est -> detection_datetime_utc,
+# deploy_long -> deploy_lon). Derives 'date' from detection_datetime_utc if absent.
+# Not exported.
+.normalize_to_atel_names <- function(data) {
 
-  if (!inherits(data, "atel")) return(data)
+  if (inherits(data, "atel")) {
+    dets <- as.data.frame(data$detections)
+    if (!"date" %in% names(dets) && "detection_datetime_utc" %in% names(dets)) {
+      dets$date <- as.Date(dets$detection_datetime_utc, tz = "UTC")
+    }
+    return(dets)
+  }
 
-  dets <- as.data.frame(data$detections)
-
-  # Rename atel column names to FESL defaults
+  # Plain dataframe: map FESL legacy names up to atel standard
   col_renames <- c(
-    receiver_sn            = "station_no",
-    detection_datetime_utc = "detection_timestamp_est",
-    deploy_lon             = "deploy_long"
+    station_no              = "receiver_sn",
+    detection_timestamp_est = "detection_datetime_utc",
+    deploy_long             = "deploy_lon"
   )
-  for (src in intersect(names(col_renames), names(dets))) {
-    names(dets)[names(dets) == src] <- col_renames[[src]]
+  for (src in intersect(names(col_renames), names(data))) {
+    names(data)[names(data) == src] <- col_renames[[src]]
   }
 
-  # Derive date column if not present
-  if (!"date" %in% names(dets) && "detection_timestamp_est" %in% names(dets)) {
-    dets$date <- as.Date(dets$detection_timestamp_est, tz = "UTC")
+  # Derive date if absent
+  if (!"date" %in% names(data) && "detection_datetime_utc" %in% names(data)) {
+    data$date <- as.Date(data$detection_datetime_utc, tz = "UTC")
   }
 
-  dets
+  data
 }
