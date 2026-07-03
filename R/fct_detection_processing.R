@@ -45,8 +45,12 @@
 #' \describe{
 #'   \item{date}{Detection date}
 #'   \item{animal_id}{Fish identifier (or custom name from \code{animal_col})}
-#'   \item{receiver_sn}{Station identifier (or custom name from \code{station_col})}
-#'   \item{residence}{Total residency time at station on that date (in specified units)}
+#'   \item{receiver_sn}{Receiver serial number (or custom name from \code{station_col})}
+#'   \item{station_id}{Station location name; present only when input contains
+#'     \code{station_id} (i.e., a positionRtools \code{atel} object)}
+#'   \item{deploy_lat}{Receiver latitude}
+#'   \item{deploy_lon}{Receiver longitude}
+#'   \item{residency}{Total residency time at station on that date (in specified units)}
 #' }
 #'
 #' @examples
@@ -80,6 +84,7 @@ calculate_residency <- function(data,
   # Normalize input: atel extraction or FESL-to-atel column rename
   #----------------------------#
   data <- .normalize_to_atel_names(data)
+  has_station_id <- "station_id" %in% names(data)
 
   # Validate inputs
   #----------------------------#
@@ -106,15 +111,21 @@ calculate_residency <- function(data,
 
   # Track movements between stations
   #----------------------------#
+  # Build select arguments as a named list; conditionally add station_id.
+  # sym() turns a character string into a column reference dplyr can evaluate.
+  # !!! (splice) unpacks the list into individual select() arguments.
+  select_cols <- list(
+    timestamp = sym(timestamp_col),
+    animal_id = sym(animal_col),
+    station   = sym(station_col),
+    lat       = sym(lat_col),
+    lon       = sym(long_col),
+    date      = sym(date_col)
+  )
+  if (has_station_id) select_cols[["station_id"]] <- sym("station_id")
+
   temp_movement <- data %>%
-    select(
-      timestamp = !!sym(timestamp_col),
-      animal_id = !!sym(animal_col),
-      station   = !!sym(station_col),
-      lat       = !!sym(lat_col),
-      lon       = !!sym(long_col),
-      date      = !!sym(date_col)
-    ) %>%
+    select(!!!select_cols) %>%
     arrange(animal_id, timestamp) %>%
     group_by(animal_id, date) %>%
     mutate(
@@ -127,17 +138,25 @@ calculate_residency <- function(data,
       moveID         = paste0(from_animal_id, from_station, station),
       moveID         = cumsum(moveID != lag(moveID, default = first(moveID)))
     ) %>%
+    { if (has_station_id) mutate(., from_station_id = lag(station_id)) else . } %>%
     ungroup()
 
   # Filter and tally residence times
   #----------------------------#
+  # Build group-by column names as a character vector; across(all_of(...)) passes
+  # them into group_by(). all_of() errors on missing columns (unlike any_of()).
+  grp_residency <- c("date", "animal_id", "from_station", "moveID")
+  if (has_station_id) grp_residency <- c(grp_residency, "from_station_id")
+
   df_residency <- temp_movement %>%
     filter(animal_id == from_animal_id) %>%
-    group_by(date, animal_id, from_station, moveID) %>%
+    group_by(across(all_of(grp_residency))) %>%
     summarize(
       detcount   = n(),
       time_start = min(from_timestamp),
       time_end   = max(timestamp),
+      from_lat   = first(from_lat),
+      from_lon   = first(from_lon),
       residence  = difftime(time_end, time_start, units = units),
       .groups    = "drop"
     ) %>%
@@ -145,11 +164,20 @@ calculate_residency <- function(data,
 
   # Sum residency by fish, date, and station
   #----------------------------#
+  # quos() captures a list of expressions as quosures (quoted expressions that
+  # remember their environment). Unlike syms(), quos() handles renaming expressions
+  # like `station_id = from_station_id` that create new column names in the output.
+  # !!! splices them into group_by() as if written inline.
+  grp_summary <- quos(date, animal_id, station = from_station)
+  if (has_station_id) grp_summary <- c(grp_summary, quos(station_id = from_station_id))
+
   df_residency_summary <- df_residency %>%
-    group_by(date, animal_id, station = from_station) %>%
+    group_by(!!!grp_summary) %>%
     summarize(
-      residence = as.numeric(sum(residence, na.rm = TRUE)),
-      .groups   = "drop"
+      deploy_lat = first(from_lat),
+      deploy_lon = first(from_lon),
+      residency  = as.numeric(sum(residence, na.rm = TRUE)),
+      .groups    = "drop"
     ) %>%
     ungroup()
 
