@@ -1,14 +1,20 @@
 Package: FESLtelemetry
 Type: Package
-Title: Telemetry Analysis Tools for the Fish Ecology Science Lab
-Version: 0.1.3
-Date: 2024-12-03
+Title: Publication-Level Acoustic Telemetry Analysis for the Fish Ecology Science Lab
+Version: 0.2.1
+Date: 2026-05-28
 Authors@R:
     person(given = "Paul",
            family = "Bzonek",
            role = c("aut", "cre"),
            email = "Paul.Bzonek@dfo-mpo.gc.ca")
-Description: Provides helper functions for acoustic telemetry analysis.
+Description: Post-processing and publication-level analysis tools for acoustic
+    telemetry data in the Fish Ecology Science Lab (FESL). Designed as a
+    downstream analytical layer for data prepared with the positionRtools
+    package. Provides station residency calculations, movement network analysis,
+    publication-quality visualizations, and standardized analysis templates.
+    Accepts positionRtools atel objects directly, with backwards compatibility
+    for plain GLATOS-format dataframes.
 URL: https://github.com/FishEcologyScience/FESL_package_telemetry
 BugReports: https://github.com/FishEcologyScience/FESL_package_telemetry/issues
 License: GPL-3
@@ -23,3 +29,10 @@ Imports:
     ggplot2 (>= 3.4.0),
     sf (>= 1.0-0),
     viridis (>= 0.6.0)
+Suggests:
+    jsonlite,
+    knitr,
+    positionRtools,
+    readxl,
+    rmarkdown
+VignetteBuilder: knitr

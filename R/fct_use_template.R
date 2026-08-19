@@ -6,7 +6,14 @@
 #'
 #' @param template Character. Name of the template to use. Available templates:
 #' \itemize{
-#'   \item \code{"summarize_dets"} - Detection data summary and quality checks
+#'   \item \code{"load_and_filter"} - Load positionRtools atel object; optionally
+#'     apply glatos_exploreR filter bookmark (template00 — run first)
+#'   \item \code{"network_residency"} - Movement network analysis and station
+#'     residency; Path A (atel) or Path B (GLATOS) (template01)
+#'   \item \code{"growth_analysis"} - Von Bertalanffy age-at-tagging, forward
+#'     projection, and optional morphology prediction (template02)
+#'   \item \code{"summarize_dets"} - (Deprecated) Detection data summary using
+#'     raw GLATOS-format dataframes. Use \code{"load_and_filter"} for new workflows.
 #' }
 #' @param output_dir Character. Directory where the template script will be saved.
 #' Default is "02_scripts" following project_template conventions.
@@ -16,18 +23,18 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Create detection summary template in default location
-#' use_template("summarize_dets")
+#' # Recommended: start every analysis session with template00
+#' use_template("load_and_filter")
 #'
 #' # Create in custom directory
-#' use_template("summarize_dets", output_dir = "03_scripts")
+#' use_template("load_and_filter", output_dir = "03_scripts")
 #' }
 #'
 #' @export
 use_template <- function(template, output_dir = "02_scripts", overwrite = FALSE) {
 
   # Validate template name
-  available_templates <- c("summarize_dets")
+  available_templates <- c("load_and_filter", "network_residency", "growth_analysis", "summarize_dets")
 
   if (!template %in% available_templates) {
     stop(
@@ -36,9 +43,21 @@ use_template <- function(template, output_dir = "02_scripts", overwrite = FALSE)
     )
   }
 
+  # Warn on deprecated template
+  if (template == "summarize_dets") {
+    warning(
+      "'summarize_dets' is deprecated. ",
+      "Use 'load_and_filter' for atel-based workflows.",
+      call. = FALSE
+    )
+  }
+
   # Map template names to file names
   template_files <- c(
-    summarize_dets = "template01-XX_summarize_dets.R"
+    load_and_filter  = "template00-XX_load_and_filter.R",
+    network_residency = "template01-XX_network_residency.R",
+    growth_analysis  = "template02-XX_growth_analysis.R",
+    summarize_dets   = "template01-XX_summarize_dets.R"
   )
 
   template_file <- template_files[[template]]
@@ -98,7 +117,10 @@ use_template <- function(template, output_dir = "02_scripts", overwrite = FALSE)
 #' @export
 list_templates <- function() {
   templates <- c(
-    "summarize_dets" = "Detection data summary and quality checks"
+    "load_and_filter"  = "Load atel object + optional glatos_exploreR filter bookmark (template00 — run first)",
+    "network_residency" = "Movement network analysis and station residency; Path A (atel) or Path B (GLATOS) (template01)",
+    "growth_analysis"  = "Von Bertalanffy age-at-tagging, forward projection, morphology prediction (template02)",
+    "summarize_dets"   = "[DEPRECATED] Detection summary using raw GLATOS dataframes"
   )
 
   cat("Available FESLtelemetry templates:\n\n")
