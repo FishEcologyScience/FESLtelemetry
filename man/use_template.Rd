@@ -9,7 +9,14 @@ use_template(template, output_dir = "02_scripts", overwrite = FALSE)
 \arguments{
 \item{template}{Character. Name of the template to use. Available templates:
 \itemize{
-\item \code{"summarize_dets"} - Detection data summary and quality checks
+\item \code{"load_and_filter"} - Load positionRtools atel object; optionally
+apply glatos_exploreR filter bookmark (template00 — run first)
+\item \code{"network_residency"} - Movement network analysis and station
+residency; Path A (atel) or Path B (GLATOS) (template01)
+\item \code{"growth_analysis"} - Von Bertalanffy age-at-tagging, forward
+projection, and optional morphology prediction (template02)
+\item \code{"summarize_dets"} - (Deprecated) Detection data summary using
+raw GLATOS-format dataframes. Use \code{"load_and_filter"} for new workflows.
 }}
 
 \item{output_dir}{Character. Directory where the template script will be saved.
@@ -27,11 +34,11 @@ customizable analysis code following FESL naming conventions.
 }
 \examples{
 \dontrun{
-# Create detection summary template in default location
-use_template("summarize_dets")
+# Recommended: start every analysis session with template00
+use_template("load_and_filter")
 
 # Create in custom directory
-use_template("summarize_dets", output_dir = "03_scripts")
+use_template("load_and_filter", output_dir = "03_scripts")
 }
 
 }

@@ -4,19 +4,33 @@
 \alias{network_summary}
 \title{Summarize Network Plot Data}
 \usage{
-network_summary(data, FishID, ReceiverID, lat, long, ...)
+network_summary(
+  data,
+  FishID = NULL,
+  ReceiverID = NULL,
+  lat = NULL,
+  long = NULL,
+  ...
+)
 }
 \arguments{
 \item{data}{A dataframe containing acoustic telemetry detection data with fish IDs,
-receiver IDs, and geographic coordinates.}
+receiver IDs, and geographic coordinates. Alternatively, a positionRtools
+\code{atel} object — in which case \code{FishID}, \code{ReceiverID},
+\code{lat}, and \code{long} are extracted automatically from the detections
+component and do not need to be supplied.}
 
-\item{FishID}{A vector or column from data describing fish identity (will be coerced to integer).}
+\item{FishID}{A vector or column from data describing fish identity (will be
+coerced to integer). Not required when \code{data} is an \code{atel} object.}
 
-\item{ReceiverID}{A vector or column from data describing acoustic receiver identity.}
+\item{ReceiverID}{A vector or column from data describing acoustic receiver
+identity. Not required when \code{data} is an \code{atel} object.}
 
-\item{lat}{A numeric vector or column from data with latitude coordinates.}
+\item{lat}{A numeric vector or column from data with latitude coordinates.
+Not required when \code{data} is an \code{atel} object.}
 
-\item{long}{A numeric vector or column from data with longitude coordinates.}
+\item{long}{A numeric vector or column from data with longitude coordinates.
+Not required when \code{data} is an \code{atel} object.}
 
 \item{...}{Additional arguments (currently unused).}
 }

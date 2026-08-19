@@ -7,45 +7,54 @@
 calculate_residency(
   data,
   animal_col = "animal_id",
-  station_col = "station_no",
-  timestamp_col = "detection_timestamp_est",
+  station_col = "receiver_sn",
+  timestamp_col = "detection_datetime_utc",
   date_col = "date",
   lat_col = "deploy_lat",
-  long_col = "deploy_long",
+  long_col = "deploy_lon",
   units = "hours"
 )
 }
 \arguments{
-\item{data}{A dataframe containing acoustic telemetry detection data.}
+\item{data}{A dataframe containing acoustic telemetry detection data.
+Alternatively, a positionRtools \code{atel} object — in which case column
+mapping is handled automatically from the detections component.}
 
 \item{animal_col}{Character. Name of column containing fish/animal identifiers.
-Default is "animal_id".}
+Default is \code{"animal_id"}.}
 
 \item{station_col}{Character. Name of column containing receiver station identifiers.
-Default is "station_no".}
+Default is \code{"receiver_sn"} (atel standard). For plain GLATOS dataframes,
+pass \code{station_col = "station_no"} or let the automatic FESL-to-atel
+column mapping handle it.}
 
 \item{timestamp_col}{Character. Name of column containing detection timestamps.
-Default is "detection_timestamp_est".}
+Default is \code{"detection_datetime_utc"} (atel standard).}
 
 \item{date_col}{Character. Name of column containing detection dates.
-Default is "date".}
+Default is \code{"date"}.}
 
 \item{lat_col}{Character. Name of column containing receiver latitude coordinates.
-Default is "deploy_lat".}
+Default is \code{"deploy_lat"}.}
 
 \item{long_col}{Character. Name of column containing receiver longitude coordinates.
-Default is "deploy_long".}
+Default is \code{"deploy_lon"} (atel standard).}
 
-\item{units}{Character. Time units for residency calculation. One of "hours" (default),
-"mins", "days", or "secs". Passed to \code{difftime()}.}
+\item{units}{Character. Time units for residency calculation. One of \code{"hours"}
+(default), \code{"mins"}, \code{"days"}, or \code{"secs"}. Passed to
+\code{difftime()}.}
 }
 \value{
 A dataframe with columns:
 \describe{
 \item{date}{Detection date}
-\item{animal_id}{Fish identifier (or custom name from animal_col)}
-\item{station}{Station identifier (or custom name from station_col)}
-\item{residence}{Total residency time at station on that date (in specified units)}
+\item{animal_id}{Fish identifier (or custom name from \code{animal_col})}
+\item{receiver_sn}{Receiver serial number (or custom name from \code{station_col})}
+\item{station_id}{Station location name; present only when input contains
+\code{station_id} (i.e., a positionRtools \code{atel} object)}
+\item{deploy_lat}{Receiver latitude}
+\item{deploy_lon}{Receiver longitude}
+\item{residency}{Total residency time at station on that date (in specified units)}
 }
 }
 \description{
@@ -57,6 +66,8 @@ the duration between first and last detection in each residency event.
 \details{
 The function performs the following steps:
 \enumerate{
+\item Normalizes input to atel column naming standard (plain FESL/GLATOS
+dataframes have legacy column names mapped up automatically)
 \item Tracks movements by comparing current and previous detection locations
 \item Calculates time lag between consecutive detections
 \item Identifies unique movement events using a movement ID
@@ -69,19 +80,20 @@ calculations. Movements between different stations reset the residency counter.
 }
 \examples{
 \dontrun{
-# Basic usage with default GLATOS column names
-residency <- calculate_residency(data_det)
+# With atel input (recommended)
+df_residency <- calculate_residency(atel_obj, units = "hours")
 
-# Custom column names
-residency <- calculate_residency(
-  data = my_data,
-  animal_col = "fish_id",
-  station_col = "receiver",
-  timestamp_col = "timestamp"
+# With plain GLATOS dataframe (FESL column names mapped automatically)
+df_residency <- calculate_residency(
+  data          = example_data_raw_dets,
+  animal_col    = "animal_id",
+  station_col   = "station_no",
+  timestamp_col = "detection_timestamp_est",
+  date_col      = "date",
+  lat_col       = "deploy_lat",
+  long_col      = "deploy_long",
+  units         = "hours"
 )
-
-# Calculate residency in days instead of hours
-residency <- calculate_residency(data_det, units = "days")
 }
 
 }
